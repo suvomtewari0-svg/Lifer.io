@@ -22,6 +22,8 @@ const NAV = [
   { id: 'profile',  Icon: User,        label: 'Profile'  },
 ]
 
+const DEFAULT_DURATION = 25 * 60  // 25 minutes in seconds
+
 export default function App() {
   // ── State ─────────────────────────────────────────────────────
   const [tab,       setTab]       = useState('home')
@@ -30,10 +32,9 @@ export default function App() {
   const [themeName, setThemeName] = useState('cyan')
   const [shopItems, setShopItems] = useState(SHOP_ITEMS)
 
-  // Trophies: one entry per completed task, kept permanently
   const [trophies, setTrophies] = useState([
-    { id: 9001, name: 'Drink 8 glasses of water',  cat: 'Health',       icon: '💧', xp: 30, coins: 8,  completedAt: Date.now() - 7200000,  weekKey: getWeekKey() },
-    { id: 9002, name: 'No social media before noon',cat: 'Productivity', icon: '📵', xp: 60, coins: 15, completedAt: Date.now() - 18000000, weekKey: getWeekKey() },
+    { id: 9001, name: 'Drink 8 glasses of water',   cat: 'Health',       icon: '💧', xp: 30, coins: 8,  completedAt: Date.now() - 7200000,  weekKey: getWeekKey() },
+    { id: 9002, name: 'No social media before noon', cat: 'Productivity', icon: '📵', xp: 60, coins: 15, completedAt: Date.now() - 18000000, weekKey: getWeekKey() },
   ])
 
   // UI overlays
@@ -42,17 +43,18 @@ export default function App() {
   const [perfectAnim, setPerfectAnim] = useState(false)
   const [showAdd,     setShowAdd]     = useState(false)
 
-  // Add-task form
+  // Task filter + add-task form
   const [filterCat, setFilterCat] = useState('All')
   const [newName,   setNewName]   = useState('')
   const [newCat,    setNewCat]    = useState('Productivity')
   const [newDiff,   setNewDiff]   = useState(2)
 
   // Focus timer
-  const [focusTask, setFocusTask] = useState(null)
-  const [focusSecs, setFocusSecs] = useState(25 * 60)
-  const [focusOn,   setFocusOn]   = useState(false)
-  const [focusDone, setFocusDone] = useState(false)
+  const [focusTask,     setFocusTask]     = useState(null)
+  const [focusDuration, setFocusDuration] = useState(DEFAULT_DURATION)  // selected duration
+  const [focusSecs,     setFocusSecs]     = useState(DEFAULT_DURATION)  // live countdown
+  const [focusOn,       setFocusOn]       = useState(false)
+  const [focusDone,     setFocusDone]     = useState(false)
   const timerRef = useRef(null)
 
   const theme = THEMES[themeName] || THEMES.cyan
@@ -89,26 +91,35 @@ export default function App() {
     return () => clearInterval(timerRef.current)
   }, [focusOn, awardXP])
 
+  // ── Duration change (only allowed when timer is stopped) ──────
+  const handleDurationChange = (secs) => {
+    if (focusOn) return
+    setFocusDuration(secs)
+    setFocusSecs(secs)
+    setFocusDone(false)
+  }
+
+  // ── Reset focus ───────────────────────────────────────────────
+  const resetFocus = () => {
+    setFocusOn(false)
+    setFocusSecs(focusDuration)   // reset to currently selected duration
+    setFocusDone(false)
+  }
+
   // ── Complete task ─────────────────────────────────────────────
   const completeTask = (id) => {
     const task = tasks.find((t) => t.id === id)
     if (!task || task.done) return
-
     const newTasks = tasks.map((t) => t.id === id ? { ...t, done: true } : t)
     setTasks(newTasks)
-
     setTrophies((prev) => [{
-      id: Date.now(),
-      name: task.name, cat: task.cat, icon: task.icon,
+      id: Date.now(), name: task.name, cat: task.cat, icon: task.icon,
       xp: task.xp, coins: task.coins,
-      completedAt: Date.now(),
-      weekKey: getWeekKey(),
+      completedAt: Date.now(), weekKey: getWeekKey(),
     }, ...prev])
-
     setFloatXP({ xp: task.xp, coins: task.coins })
     setTimeout(() => setFloatXP(null), 1800)
     awardXP(task.xp, task.coins)
-
     const newDone = newTasks.filter((t) => t.done).length
     if (newDone === newTasks.length) {
       setTimeout(() => { setPerfectAnim(true); setTimeout(() => setPerfectAnim(false), 3000) }, 400)
@@ -137,9 +148,6 @@ export default function App() {
     setUser((u) => ({ ...u, coins: u.coins - item.cost }))
   }
 
-  // ── Reset focus ───────────────────────────────────────────────
-  const resetFocus = () => { setFocusOn(false); setFocusSecs(25 * 60); setFocusDone(false) }
-
   // ── Tab render ────────────────────────────────────────────────
   const renderTab = () => {
     switch (tab) {
@@ -148,7 +156,12 @@ export default function App() {
       case 'tasks':
         return <TasksTab tasks={tasks} theme={theme} S={S} filterCat={filterCat} setFilterCat={setFilterCat} onComplete={completeTask} onAddTask={() => setShowAdd(true)} />
       case 'focus':
-        return <FocusTab tasks={tasks} theme={theme} S={S} focusTask={focusTask} setFocusTask={setFocusTask} focusSecs={focusSecs} focusOn={focusOn} setFocusOn={setFocusOn} focusDone={focusDone} resetFocus={resetFocus} />
+        return <FocusTab tasks={tasks} theme={theme} S={S}
+          focusTask={focusTask} setFocusTask={setFocusTask}
+          focusSecs={focusSecs} focusOn={focusOn} setFocusOn={setFocusOn}
+          focusDone={focusDone} focusDuration={focusDuration}
+          onDurationChange={handleDurationChange} resetFocus={resetFocus}
+        />
       case 'trophies':
         return <TrophiesTab trophies={trophies} theme={theme} S={S} />
       case 'rewards':
@@ -162,16 +175,46 @@ export default function App() {
 
   return (
     <>
-      <style>{`body { background: ${theme.bg}; }`}</style>
+      <style>{`
+        body { background: ${theme.bg}; }
+      `}</style>
 
-      <div style={{ maxWidth: 430, margin: '0 auto', minHeight: 'max(100vh,100dvh)', background: theme.bg, position: 'relative', fontFamily: "'DM Sans', system-ui, -apple-system, sans-serif", overflow: 'hidden' }}>
+      {/*
+        Outer shell — no overflow:hidden so iOS rubber-band scrolling works correctly.
+        Safe-area padding is handled inside the scroll container (top) and nav (bottom).
+      */}
+      <div style={{
+        maxWidth: 430,
+        margin: '0 auto',
+        minHeight: '100dvh',
+        background: theme.bg,
+        position: 'relative',
+        fontFamily: "'DM Sans', system-ui, -apple-system, sans-serif",
+      }}>
 
-        {/* Ambient glow */}
+        {/* Ambient glow orbs */}
         <div style={{ position: 'fixed', top: -80, right: -80, width: 260, height: 260, background: `radial-gradient(circle,${theme.p}18,transparent 65%)`, pointerEvents: 'none', zIndex: 0 }} />
-        <div style={{ position: 'fixed', bottom: 120, left: -80,  width: 220, height: 220, background: `radial-gradient(circle,${theme.s}10,transparent 65%)`, pointerEvents: 'none', zIndex: 0 }} />
+        <div style={{ position: 'fixed', bottom: 120, left: -80, width: 220, height: 220, background: `radial-gradient(circle,${theme.s}10,transparent 65%)`, pointerEvents: 'none', zIndex: 0 }} />
 
-        {/* Scrollable content */}
-        <div key={tab} style={{ position: 'relative', zIndex: 1, height: 'max(100vh,100dvh)', overflowY: 'auto', overflowX: 'hidden', animation: 'fadeSlide 0.28s ease' }}>
+        {/*
+          Scrollable content.
+          paddingTop: safe-area-inset-top  →  clears the Dynamic Island / notch.
+          WebkitOverflowScrolling: touch   →  smooth momentum scrolling on iOS.
+          height: 100dvh                  →  uses the visual viewport height (correct on iOS Safari).
+        */}
+        <div
+          key={tab}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            height: '100dvh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingTop: 'env(safe-area-inset-top)',
+            WebkitOverflowScrolling: 'touch',
+            animation: 'fadeSlide 0.28s ease',
+          }}
+        >
           {renderTab()}
         </div>
 
@@ -218,18 +261,38 @@ export default function App() {
           />
         )}
 
-        {/* Bottom nav */}
-        <nav style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 430, background: 'rgba(6,6,16,0.94)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/*
+          Bottom nav.
+          paddingBottom: safe-area-inset-bottom  →  lifts nav above the iPhone home indicator.
+          The tab content already has 110px bottom padding which clears the nav height + home indicator.
+        */}
+        <nav style={{
+          position: 'fixed', bottom: 0,
+          left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: 430,
+          background: 'rgba(6,6,16,0.94)',
+          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex',
+          zIndex: 100,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}>
           {NAV.map(({ id, Icon, label }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               aria-label={label}
               aria-current={tab === id ? 'page' : undefined}
-              style={{ flex: 1, padding: '9px 0 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer' }}
+              style={{
+                flex: 1, padding: '9px 0 12px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                background: 'none', border: 'none', cursor: 'pointer',
+              }}
             >
               <Icon size={18} style={{ color: tab === id ? theme.p : '#475569', filter: tab === id ? `drop-shadow(0 0 6px ${theme.p})` : 'none', transition: 'all 0.2s' }} />
-              <span style={{ fontSize: '8.5px', fontWeight: 600, color: tab === id ? theme.p : '#475569', textTransform: 'uppercase', letterSpacing: '0.4px', transition: 'all 0.2s' }}>{label}</span>
+              <span style={{ fontSize: '8.5px', fontWeight: 600, color: tab === id ? theme.p : '#475569', textTransform: 'uppercase', letterSpacing: '0.4px', transition: 'all 0.2s' }}>
+                {label}
+              </span>
             </button>
           ))}
         </nav>
