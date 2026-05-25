@@ -2,7 +2,14 @@ import { Plus, Flame } from 'lucide-react'
 import TaskCard from './TaskCard.jsx'
 import { CHALLENGES, XP_PER_LEVEL, getRank } from '../constants.js'
 
-export default function HomeTab({ tasks, user, theme, S, onComplete, onAddTask }) {
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+export default function HomeTab({ tasks, user, username, avatar, theme, S, onComplete, onAddTask }) {
   const doneCount  = tasks.filter((t) => t.done).length
   const totalCount = tasks.length
   const pct        = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
@@ -13,19 +20,26 @@ export default function HomeTab({ tasks, user, theme, S, onComplete, onAddTask }
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.label}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginTop: 3, fontFamily: "'Syne', sans-serif" }}>
-            Good morning, <span style={S.neon}>Hero</span>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginTop: 3, fontFamily: "'Syne', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {greeting()}, <span style={S.neon}>{username}</span>
           </div>
         </div>
-        <div style={{ ...S.glass, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Flame size={16} style={{ color: '#ef4444', filter: 'drop-shadow(0 0 6px #ef4444)' }} />
-          <span style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Mono', monospace" }}>
-            {user.streak}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}>
+          {/* Avatar bubble */}
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg,${theme.p},${theme.s})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, boxShadow: `0 0 10px ${theme.glow}` }}>
+            {avatar}
+          </div>
+          {/* Streak */}
+          <div style={{ ...S.glass, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Flame size={15} style={{ color: '#ef4444', filter: 'drop-shadow(0 0 6px #ef4444)' }} />
+            <span style={{ fontSize: 17, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Space Mono', monospace" }}>
+              {user.streak}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -111,14 +125,10 @@ export default function HomeTab({ tasks, user, theme, S, onComplete, onAddTask }
         <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 16, fontFamily: "'Syne', sans-serif" }}>
           Today's Tasks
         </span>
-        <button
-          onClick={onAddTask}
-          style={{ ...S.btn, padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
-        >
+        <button onClick={onAddTask} style={{ ...S.btn, padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
           <Plus size={12} /> Add
         </button>
       </div>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {tasks.slice(0, 7).map((t) => (
           <TaskCard key={t.id} task={t} theme={theme} S={S} onComplete={() => onComplete(t.id)} />

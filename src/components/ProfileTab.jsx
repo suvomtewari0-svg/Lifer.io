@@ -1,21 +1,50 @@
-import { Lock } from 'lucide-react'
+import { Lock, Pencil } from 'lucide-react'
 import { RANKS, THEMES, XP_PER_LEVEL, getRank } from '../constants.js'
 
-export default function ProfileTab({ user, theme, themeName, setThemeName, S }) {
+export default function ProfileTab({ user, username, avatar, theme, themeName, setThemeName, S, onEditProfile }) {
   const rank = getRank(user.level)
 
   return (
     <div style={{ padding: '20px 16px 110px' }}>
 
-      {/* Avatar */}
+      {/* Avatar + name */}
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <div style={{ width: 80, height: 80, borderRadius: '50%', background: `linear-gradient(135deg,${theme.p},${theme.s})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, margin: '0 auto 12px', boxShadow: `0 0 28px ${theme.glow}` }}>
-          ⚡
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', background: `linear-gradient(135deg,${theme.p},${theme.s})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, boxShadow: `0 0 28px ${theme.glow}` }}>
+            {avatar}
+          </div>
+          {/* Edit button */}
+          <button
+            onClick={onEditProfile}
+            aria-label="Edit profile"
+            style={{
+              position: 'absolute', bottom: 0, right: -4,
+              width: 26, height: 26, borderRadius: '50%',
+              background: `linear-gradient(135deg,${theme.p},${theme.s})`,
+              border: '2px solid #0f1020',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', boxShadow: `0 0 8px ${theme.glow}`,
+            }}
+          >
+            <Pencil size={12} style={{ color: '#000' }} />
+          </button>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Syne', sans-serif" }}>Hero</div>
-        <div style={{ color: rank.color, fontSize: 13, fontWeight: 700, marginTop: 4 }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', fontFamily: "'Syne', sans-serif" }}>
+            {username}
+          </div>
+        </div>
+        <div style={{ color: rank.color, fontSize: 13, fontWeight: 700 }}>
           {rank.name} · Level {user.level}
         </div>
+
+        <button
+          onClick={onEditProfile}
+          style={{ marginTop: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 999, padding: '5px 14px', color: '#94a3b8', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <Pencil size={11} /> Edit Profile
+        </button>
       </div>
 
       {/* Theme switcher */}
