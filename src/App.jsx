@@ -14,6 +14,50 @@ import TrophiesTab      from './components/TrophiesTab.jsx'
 import AddTaskModal     from './components/AddTaskModal.jsx'
 import EditProfileModal from './components/EditProfileModal.jsx'
 
+// ── helpers ───────────────────────────────────────────────────
+function load(key, fallback) {
+  try {
+    const v = localStorage.getItem(key)
+    return v ? JSON.parse(v) : fallback
+  } catch { return fallback }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+}
+
+function msUntilTime(timeStr) {
+  if (!timeStr) return -1
+  const [h, m] = timeStr.split(':').map(Number)
+  const now    = new Date()
+  const target = new Date()
+  target.setHours(h, m, 0, 0)
+  const diff = target - now
+  return diff > 0 ? diff : -1   // -1 means time already passed today
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false
+  if (Notification.permission === 'granted') return true
+  if (Notification.permission === 'denied') return false
+  const result = await Notification.requestPermission()
+  return result === 'granted'
+}
+
+function scheduleNotification(task) {
+  if (!task.startTime || task.done) return null
+  const ms = msUntilTime(task.startTime)
+  if (ms < 0) return null
+  return setTimeout(() => {
+    if (Notification.permission === 'granted') {
+      new Notification('Lifer ⚡ — Time to start!', {
+        body: task.name,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+      })
+    }
+  }, ms)
+}
+
 const NAV = [
   { id: 'home',     Icon: Home,        label: 'Home'     },
   { id: 'tasks',    Icon: CheckSquare, label: 'Tasks'    },
@@ -26,34 +70,61 @@ const NAV = [
 const DEFAULT_DURATION = 25 * 60
 
 export default function App() {
-  // ── Profile ───────────────────────────────────────────────────
-  const [username,        setUsername]        = useState('Hero')
-  const [avatar,          setAvatar]          = useState('⚡')
-  const [showEditProfile, setShowEditProfile] = useState(false)
-
-  // ── Core state ────────────────────────────────────────────────
-  const [tab,       setTab]       = useState('home')
-  const [tasks,     setTasks]     = useState(INIT_TASKS)
-  const [user,      setUser]      = useState({ xp: 275, coins: 340, streak: 7, level: 3, totalXP: 1775 })
-  const [themeName, setThemeName] = useState('cyan')
-  const [shopItems, setShopItems] = useState(SHOP_ITEMS)
-
-  const [trophies, setTrophies] = useState([
+  // ── Persisted state (loaded from localStorage on mount) ───────
+  const [username,   setUsername]   = useState(() => load('lifer_username', 'Hero'))
+  const [avatar,     setAvatar]     = useState(() => load('lifer_avatar',   '⚡'))
+  const [profilePic, setProfilePic] = useState(() => load('lifer_profilePic', null))
+  const [themeName,  setThemeName]  = useState(() => load('lifer_theme',    'cyan'))
+  const [user,       setUser]       = useState(() => load('lifer_user',     { xp: 275, coins: 340, streak: 7, level: 3, totalXP: 1775 }))
+  const [tasks,      setTasks]      = useState(() => load('lifer_tasks',    INIT_TASKS))
+  const [trophies,   setTrophies]   = useState(() => load('lifer_trophies', [
     { id: 9001, name: 'Drink 8 glasses of water',   cat: 'Health',       icon: '💧', xp: 30, coins: 8,  completedAt: Date.now() - 7200000,  weekKey: getWeekKey() },
     { id: 9002, name: 'No social media before noon', cat: 'Productivity', icon: '📵', xp: 60, coins: 15, completedAt: Date.now() - 18000000, weekKey: getWeekKey() },
-  ])
+  ]))
+  const [shopItems,  setShopItems]  = useState(() => load('lifer_shopItems', SHOP_ITEMS))
 
-  // UI overlays
-  const [floatXP,     setFloatXP]     = useState(null)
-  const [levelAnim,   setLevelAnim]   = useState(false)
-  const [perfectAnim, setPerfectAnim] = useState(false)
-  const [showAdd,     setShowAdd]     = useState(false)
+  // ── Persist to localStorage whenever state changes ─────────────
+  useEffect(() => { save('lifer_username',   username)   }, [username])
+  useEffect(() => { save('lifer_avatar',     avatar)     }, [avatar])
+  useEffect(() => { save('lifer_profilePic', profilePic) }, [profilePic])
+  useEffect(() => { save('lifer_theme',      themeName)  }, [themeName])
+  useEffect(() => { save('lifer_user',       user)       }, [user])
+  useEffect(() => { save('lifer_tasks',      tasks)      }, [tasks])
+  useEffect(() => { save('lifer_trophies',   trophies)   }, [trophies])
+  useEffect(() => { save('lifer_shopItems',  shopItems)  }, [shopItems])
 
-  // Task filter + add-task form
-  const [filterCat, setFilterCat] = useState('All')
-  const [newName,   setNewName]   = useState('')
-  const [newCat,    setNewCat]    = useState('Productivity')
-  const [newDiff,   setNewDiff]   = useState(2)
+  // ── Schedule notifications for all tasks with future times ────
+  // Runs on mount and whenever tasks change
+  const notifTimers = useRef({})
+  useEffect(() => {
+    // Clear old timers
+    Object.values(notifTimers.current).forEach(clearTimeout)
+    notifTimers.current = {}
+    // Re-schedule
+    tasks.forEach(task => {
+      if (task.startTime && !task.done) {
+        const id = scheduleNotification(task)
+        if (id) notifTimers.current[task.id] = id
+      }
+    })
+    return () => Object.values(notifTimers.current).forEach(clearTimeout)
+  }, [tasks])
+
+  // ── UI state ───────────────────────────────────────────────────
+  const [tab,             setTab]             = useState('home')
+  const [showAdd,         setShowAdd]         = useState(false)
+  const [showEditProfile, setShowEditProfile] = useState(false)
+  const [floatXP,         setFloatXP]         = useState(null)
+  const [levelAnim,       setLevelAnim]       = useState(false)
+  const [perfectAnim,     setPerfectAnim]     = useState(false)
+
+  // Add-task form
+  const [filterCat,    setFilterCat]    = useState('All')
+  const [newName,      setNewName]      = useState('')
+  const [newCat,       setNewCat]       = useState('Productivity')
+  const [newDiff,      setNewDiff]      = useState(2)
+  const [newDuration,  setNewDuration]  = useState(null)
+  const [newStartTime, setNewStartTime] = useState('')
 
   // Focus timer
   const [focusTask,     setFocusTask]     = useState(null)
@@ -79,7 +150,7 @@ export default function App() {
     })
   }, [])
 
-  // ── Focus timer tick ──────────────────────────────────────────
+  // ── Focus timer ───────────────────────────────────────────────
   useEffect(() => {
     if (!focusOn) { clearInterval(timerRef.current); return }
     timerRef.current = setInterval(() => {
@@ -95,7 +166,6 @@ export default function App() {
     if (focusOn) return
     setFocusDuration(secs); setFocusSecs(secs); setFocusDone(false)
   }
-
   const resetFocus = () => { setFocusOn(false); setFocusSecs(focusDuration); setFocusDone(false) }
 
   // ── Complete task ─────────────────────────────────────────────
@@ -115,11 +185,21 @@ export default function App() {
   }
 
   // ── Add task ──────────────────────────────────────────────────
-  const addTask = () => {
+  const addTask = async () => {
     if (!newName.trim()) return
-    const xpMap = { 1: 25, 2: 50, 3: 75 }; const coinsMap = { 1: 6, 2: 12, 3: 20 }
-    setTasks((ts) => [...ts, { id: Date.now(), name: newName.trim(), cat: newCat, xp: xpMap[newDiff], coins: coinsMap[newDiff], diff: newDiff, done: false, icon: CAT_ICONS[newCat] }])
-    setNewName(''); setShowAdd(false)
+    const xpMap = { 1: 25, 2: 50, 3: 75 }
+    const coinsMap = { 1: 6, 2: 12, 3: 20 }
+    const task = {
+      id: Date.now(), name: newName.trim(), cat: newCat,
+      xp: xpMap[newDiff], coins: coinsMap[newDiff],
+      diff: newDiff, done: false, icon: CAT_ICONS[newCat],
+      duration: newDuration || null,
+      startTime: newStartTime || null,
+    }
+    // Request notification permission if a start time was set
+    if (newStartTime) await requestNotificationPermission()
+    setTasks((ts) => [...ts, task])
+    setNewName(''); setNewDuration(null); setNewStartTime(''); setShowAdd(false)
   }
 
   // ── Buy item ──────────────────────────────────────────────────
@@ -131,20 +211,19 @@ export default function App() {
   }
 
   // ── Save profile ──────────────────────────────────────────────
-  const saveProfile = (newName, newAvatar) => {
-    setUsername(newName)
-    setAvatar(newAvatar)
+  const saveProfile = (name, emoji, pic) => {
+    setUsername(name); setAvatar(emoji); setProfilePic(pic)
   }
 
   // ── Tab render ────────────────────────────────────────────────
   const renderTab = () => {
     switch (tab) {
-      case 'home':     return <HomeTab tasks={tasks} user={user} username={username} avatar={avatar} theme={theme} S={S} onComplete={completeTask} onAddTask={() => setShowAdd(true)} />
+      case 'home':     return <HomeTab tasks={tasks} user={user} username={username} avatar={avatar} profilePic={profilePic} theme={theme} S={S} onComplete={completeTask} onAddTask={() => setShowAdd(true)} />
       case 'tasks':    return <TasksTab tasks={tasks} theme={theme} S={S} filterCat={filterCat} setFilterCat={setFilterCat} onComplete={completeTask} onAddTask={() => setShowAdd(true)} />
       case 'focus':    return <FocusTab tasks={tasks} theme={theme} S={S} focusTask={focusTask} setFocusTask={setFocusTask} focusSecs={focusSecs} focusOn={focusOn} setFocusOn={setFocusOn} focusDone={focusDone} focusDuration={focusDuration} onDurationChange={handleDurationChange} resetFocus={resetFocus} />
       case 'trophies': return <TrophiesTab trophies={trophies} theme={theme} S={S} />
       case 'rewards':  return <RewardsTab user={user} theme={theme} S={S} shopItems={shopItems} onBuy={buyItem} themeName={themeName} setThemeName={setThemeName} />
-      case 'profile':  return <ProfileTab user={user} username={username} avatar={avatar} theme={theme} themeName={themeName} setThemeName={setThemeName} S={S} onEditProfile={() => setShowEditProfile(true)} />
+      case 'profile':  return <ProfileTab user={user} username={username} avatar={avatar} profilePic={profilePic} theme={theme} themeName={themeName} setThemeName={setThemeName} S={S} onEditProfile={() => setShowEditProfile(true)} />
       default:         return null
     }
   }
@@ -155,11 +234,9 @@ export default function App() {
 
       <div style={{ maxWidth: 430, margin: '0 auto', minHeight: '100dvh', background: theme.bg, position: 'relative', fontFamily: "'DM Sans', system-ui, -apple-system, sans-serif" }}>
 
-        {/* Ambient glow */}
         <div style={{ position: 'fixed', top: -80, right: -80, width: 260, height: 260, background: `radial-gradient(circle,${theme.p}18,transparent 65%)`, pointerEvents: 'none', zIndex: 0 }} />
         <div style={{ position: 'fixed', bottom: 120, left: -80, width: 220, height: 220, background: `radial-gradient(circle,${theme.s}10,transparent 65%)`, pointerEvents: 'none', zIndex: 0 }} />
 
-        {/* Scrollable content */}
         <div key={tab} style={{ position: 'relative', zIndex: 1, height: '100dvh', overflowY: 'auto', overflowX: 'hidden', paddingTop: 'env(safe-area-inset-top)', WebkitOverflowScrolling: 'touch', animation: 'fadeSlide 0.28s ease' }}>
           {renderTab()}
         </div>
@@ -178,7 +255,9 @@ export default function App() {
         {levelAnim && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', animation: 'levelUp 2.6s ease-out forwards' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 56, marginBottom: 10 }}>{avatar}</div>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', background: `linear-gradient(135deg,${theme.p},${theme.s})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, margin: '0 auto 12px', overflow: 'hidden', boxShadow: `0 0 28px ${theme.glow}` }}>
+                {profilePic ? <img src={profilePic} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : avatar}
+              </div>
               <div style={{ fontSize: 34, fontWeight: 900, color: theme.p, textShadow: `0 0 30px ${theme.glow}`, fontFamily: "'Syne', sans-serif" }}>LEVEL UP!</div>
               <div style={{ color: '#94a3b8', fontSize: 15, marginTop: 8 }}>Level {user.level} reached</div>
             </div>
@@ -198,12 +277,24 @@ export default function App() {
 
         {/* Add Task modal */}
         {showAdd && (
-          <AddTaskModal theme={theme} S={S} newName={newName} setNewName={setNewName} newCat={newCat} setNewCat={setNewCat} newDiff={newDiff} setNewDiff={setNewDiff} onAdd={addTask} onClose={() => setShowAdd(false)} />
+          <AddTaskModal
+            theme={theme} S={S}
+            newName={newName}           setNewName={setNewName}
+            newCat={newCat}             setNewCat={setNewCat}
+            newDiff={newDiff}           setNewDiff={setNewDiff}
+            newDuration={newDuration}   setNewDuration={setNewDuration}
+            newStartTime={newStartTime} setNewStartTime={setNewStartTime}
+            onAdd={addTask} onClose={() => setShowAdd(false)}
+          />
         )}
 
         {/* Edit Profile modal */}
         {showEditProfile && (
-          <EditProfileModal theme={theme} S={S} username={username} avatar={avatar} onSave={saveProfile} onClose={() => setShowEditProfile(false)} />
+          <EditProfileModal
+            theme={theme} S={S}
+            username={username} avatar={avatar} profilePic={profilePic}
+            onSave={saveProfile} onClose={() => setShowEditProfile(false)}
+          />
         )}
 
         {/* Bottom nav */}

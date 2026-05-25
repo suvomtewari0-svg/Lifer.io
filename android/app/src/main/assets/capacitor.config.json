@@ -1,0 +1,11 @@
+{
+	"appId": "com.lifer.app",
+	"appName": "Lifer",
+	"webDir": "dist",
+	"android": {},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 0
+		}
+	}
+}

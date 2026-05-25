@@ -1,7 +1,7 @@
 import { Lock, Pencil } from 'lucide-react'
 import { RANKS, THEMES, XP_PER_LEVEL, getRank } from '../constants.js'
 
-export default function ProfileTab({ user, username, avatar, theme, themeName, setThemeName, S, onEditProfile }) {
+export default function ProfileTab({ user, username, avatar, profilePic, theme, themeName, setThemeName, S, onEditProfile }) {
   const rank = getRank(user.level)
 
   return (
